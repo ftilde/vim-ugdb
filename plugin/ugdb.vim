@@ -40,7 +40,7 @@ class UgdbServer:
     def set_breakpoint(self, file, line):
         return self.make_request("set_breakpoint", {
             "file": file,
-            "line": line
+            "line": int(line)
             })
 
 
