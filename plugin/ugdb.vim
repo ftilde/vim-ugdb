@@ -1,3 +1,9 @@
+" TODO:
+" - Keep server object active... maybe
+" - Smart server selection (maybe interactive fallback) using
+"   get_instance_info
+" - Timeout on missbehaving servers
+
 if !has('python3')
     echo "Error: Required vim compiled with +python3"
     finish
@@ -5,7 +11,7 @@ endif
 
 " Setup all required python functions in the environment.
 " This function is expected to be called exactly once.
-function! SetupPython()
+function! UGDBSetupPython()
 python3 << EOF
 import socket
 import sys
@@ -43,6 +49,8 @@ class UgdbServer:
             "line": int(line)
             })
 
+    def get_instance_info(self):
+        return self.make_request("get_instance_info", {})
 
     def make_request(self, function_name, parameters):
         # Encode request
@@ -74,30 +82,103 @@ class UgdbServer:
             amount_received += len(data)
             response_message += data.decode('utf8')
 
-        return response_message
+        return json.loads(response_message)
 
 
 def ugdb_list_servers(socket_base_dir):
     return [UgdbServer(socket_base_dir, identifier) for identifier in ugdb_list_potential_server_sockets(socket_base_dir)]
 
+def ugdb_interactive_server_select(servers):
+    while True:
+        id = 0
+        for s in servers:
+            info = s.get_instance_info()
+            if info['type'] == 'success':
+                print("{}: {}".format(id, info['result']['working_directory']))
+                id += 1
+
+        selection = ugdb_getchar()
+        if selection is None or selection in [13, 27, 0, 3]:
+            return None
+        selection_char = chr(selection);
+        try:
+            selection_int = int(selection_char)
+            if selection_int < id:
+                info = s.get_instance_info()
+                if info['type'] == 'success':
+                    print("Selected: {} ({})".format(selection_int, info['result']['working_directory']))
+                    return servers[selection_int]
+                else:
+                    print("Selected server disconnected");
+                    return None
+        except ValueError:
+            pass
+        print("Invalid selection: {}".format(selection_char))
+
+def ugdb_set_active_server(socket_base_dir):
+    global ugdb_current_server
+    servers = ugdb_list_servers(socket_base_dir)
+    if not servers:
+        print("No active ugdb servers.")
+        return
+
+    new_server = ugdb_interactive_server_select(servers)
+
+    if new_server is None:
+        ugdb_current_server = None
+    else:
+        ugdb_current_server = new_server.identifier
+
 def ugdb_get_active_server(socket_base_dir):
+    global ugdb_current_server
+
     need_new_server = False
     servers = ugdb_list_servers(socket_base_dir)
     if not servers:
+        print("No active ugdb servers.")
         return None
 
     matching_server = [s for s in servers if s.identifier == ugdb_current_server]
 
+    new_server = None
     if not matching_server:
         if len(servers) == 1:
-            return servers[0]
+            new_server = servers[0]
         else:
-            # TODO: Let the user decide or try to match from working directory (ugdb/vim)
-            # Also, we can employ some heuristic once an identification command (or similar) is implemented in ugdb,
+            # TODO: we can employ some heuristic once an identification command (or similar) is implemented in ugdb,
             # e.g.: Try to match the working directories of ugdb and the current vim instance
-            return servers[0]
+            print("Failed to automatically instance. Please choose manually:")
+            new_server = ugdb_interactive_server_select(servers)
     else:
-        return matching_server[0]
+        new_server = matching_server[0]
+
+    if new_server is None:
+        ugdb_current_server = None
+    else:
+        ugdb_current_server = new_server.identifier
+    return new_server
+
+def ugdb_getchar():
+    charcode_str = vim.eval('getchar()')
+
+    if len(charcode_str) == 0:
+        return None
+    else:
+        return int(charcode_str)
+
+def ugdb_read_line():
+    line = ""
+    while True:
+        charcode = ugdb_getchar()
+        if charcode is None or charcode == 13 or charcode == 27 or charcode == 0 or charcode == 3:
+            break;
+        char = chr(charcode)
+
+        #print(char, end='')
+        #sys.stdout.flush()
+        line += char
+
+    return line
 
 def ugdb_print_status(status):
     #vim.command('echom "{}"'.format(status))
@@ -105,11 +186,18 @@ def ugdb_print_status(status):
 EOF
 endfunction
 
-call SetupPython()
+call UGDBSetupPython()
 
 " Try to set a breakpoint at the specified line in the specified file.
 " The "best fitting" ugdb instance is chosen as a target
-function! SetBreakpoint(file, line)
+function! s:SelectInstance()
+python3 << EOF
+socket_base_dir = os.path.join(os.getenv('XDG_RUNTIME_DIR'), 'ugdb')
+ugdb_set_active_server(socket_base_dir)
+EOF
+endfunction
+
+function! s:SetBreakpoint(file, line)
 python3 << EOF
 import vim
 import json
@@ -127,4 +215,5 @@ else:
 EOF
 endfunction
 
-command! -nargs=0 UGDBBreakpoint call SetBreakpoint(@%, line('.'))
+command! -nargs=0 UGDBBreakpoint call s:SetBreakpoint(@%, line('.'))
+command! -nargs=0 UGDBSelectInstance call s:SelectInstance()
