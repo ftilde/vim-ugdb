@@ -1,8 +1,6 @@
-" TODO:
-" - Keep server object active... maybe
-" - Smart server selection (maybe interactive fallback) using
-"   get_instance_info
-" - Timeout on missbehaving servers
+" ----------------------------------------------------------------------------
+" Setup ----------------------------------------------------------------------
+" ----------------------------------------------------------------------------
 
 if !has('python3')
     echo "Error: Required vim compiled with +python3"
@@ -188,8 +186,12 @@ endfunction
 
 call UGDBSetupPython()
 
-" Try to set a breakpoint at the specified line in the specified file.
-" The "best fitting" ugdb instance is chosen as a target
+
+" ----------------------------------------------------------------------------
+" Vim function implementation ------------------------------------------------
+" ----------------------------------------------------------------------------
+
+" Manually select the ugdb instance to connect to.
 function! s:SelectInstance()
 python3 << EOF
 socket_base_dir = os.path.join(os.getenv('XDG_RUNTIME_DIR'), 'ugdb')
@@ -197,6 +199,9 @@ ugdb_set_active_server(socket_base_dir)
 EOF
 endfunction
 
+" Try to set a breakpoint at the specified line in the specified file.
+" The currently active ugdb instance is chosen as a target.
+" If no instance is selected, a selection has to be made first.
 function! s:SetBreakpoint(file, line)
 python3 << EOF
 import vim
@@ -215,5 +220,9 @@ else:
 EOF
 endfunction
 
+
+" ----------------------------------------------------------------------------
+" Public vim commands --------------------------------------------------------
+" ----------------------------------------------------------------------------
 command! -nargs=0 UGDBBreakpoint call s:SetBreakpoint(@%, line('.'))
 command! -nargs=0 UGDBSelectInstance call s:SelectInstance()
