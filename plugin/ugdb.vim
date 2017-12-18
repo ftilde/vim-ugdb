@@ -90,10 +90,13 @@ def ugdb_interactive_server_select(servers):
     while True:
         id = 0
         for s in servers:
-            info = s.get_instance_info()
-            if info['type'] == 'success':
-                print("{}: {}".format(id, info['result']['working_directory']))
-                id += 1
+            try:
+                info = s.get_instance_info()
+                if info['type'] == 'success':
+                    print("{}: {}".format(id, info['result']['working_directory']))
+                    id += 1
+            except OSError:
+                pass # A crashing ugdb instance may have left a pipe behind
 
         selection = ugdb_getchar()
         if selection is None or selection in [13, 27, 0, 3]:
