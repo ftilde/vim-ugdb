@@ -139,7 +139,6 @@ def ugdb_get_active_server(socket_base_dir):
     need_new_server = False
     servers = ugdb_list_servers(socket_base_dir)
     if not servers:
-        ugdb_print_status("No active ugdb servers.")
         return None
 
     matching_server = [s for s in servers if s.identifier == ugdb_current_server]
