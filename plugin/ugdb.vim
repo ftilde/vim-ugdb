@@ -120,17 +120,17 @@ def ugdb_interactive_server_select(servers):
                     ugdb_print_status("Selected: {} ({})".format(selection_int, wd))
                     return servers[selection_int]
                 else:
-                    ugdb_print_status("Selected server disconnected");
+                    ugdb_print_status("Selected server disconnected", "ErrorMsg");
                     return None
         except ValueError:
             pass
-        ugdb_print_status("Invalid selection: {}".format(selection_char))
+        ugdb_print_status("Invalid selection: {}".format(selection_char), "ErrorMsg")
 
 def ugdb_set_active_server(socket_base_dir):
     global ugdb_current_server
     servers = ugdb_list_servers(socket_base_dir)
     if not servers:
-        ugdb_print_status("No active ugdb servers.")
+        ugdb_print_status("No active ugdb servers.", "ErrorMsg")
         return
 
     new_server = ugdb_interactive_server_select(servers)
@@ -172,7 +172,7 @@ def ugdb_get_active_server(socket_base_dir):
                         longest_common_path_len = common_path_len
 
             if len(best_matching_servers) != 1:
-                ugdb_print_status("Failed to automatically select instance. Please choose manually:")
+                ugdb_print_status("Failed to automatically select instance. Please choose manually:", "WarningMsg")
                 new_server = ugdb_interactive_server_select(servers)
             else:
                 ugdb_print_status("Automatically selected ugdb server at {}".format(best_path))
@@ -208,9 +208,14 @@ def ugdb_read_line():
 
     return line
 
-def ugdb_print_status(status):
-    #vim.command('echom "{}"'.format(status))
-    print(status)
+def ugdb_print_status(status, highlight=None):
+    if highlight:
+        vim.command('echohl {}'.format(highlight))
+        vim.command('echo "{}"'.format(status))
+        vim.command('echohl None')
+    else:
+        vim.command('echo "{}"'.format(status))
+        #print(status)
 EOF
 endfunction
 
@@ -242,7 +247,7 @@ line = vim.eval("a:line")
 
 server = ugdb_get_active_server(socket_base_dir)
 if server is None:
-    ugdb_print_status("No active ugdb instance!")
+    ugdb_print_status("No active ugdb instance!", "ErrorMsg")
 else:
     response = server.set_breakpoint(file, line)
     if response:
@@ -254,13 +259,13 @@ else:
             ugdb_print_status(result)
         elif type == "error" and reason:
             if details:
-                ugdb_print_status("{} {}".format(reason, details))
+                ugdb_print_status("{} {}".format(reason, details), "ErrorMsg")
             else:
-                ugdb_print_status(reason)
+                ugdb_print_status(reason, "ErrorMsg")
         else:
-            ugdb_print_status("Tried to set breakpoint. Invalid Response: '{}'".format(response))
+            ugdb_print_status("Tried to set breakpoint. Invalid Response: '{}'".format(response), "ErrorMsg")
     else:
-        ugdb_print_status("Tried to set breakpoint, but got no response")
+        ugdb_print_status("Tried to set breakpoint, but got no response", "ErrorMsg")
 EOF
 endfunction
 
