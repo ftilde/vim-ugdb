@@ -33,12 +33,10 @@ class UgdbServer:
         self.path = os.path.join(socket_path, identifier)
         self.identifier = identifier
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(0.1) #100ms ought to be enough for everyone
 
-        try:
-            self.sock.connect(self.path)
-        except Exception as msg:
-            ugdb_print_status("Cannot connect to socket at {}:".format(self.path))
-            ugdb_print_status(msg)
+        #might fail and throw and exception
+        self.sock.connect(self.path)
 
     def set_breakpoint(self, file, line):
         return self.make_request("set_breakpoint", {
@@ -51,46 +49,55 @@ class UgdbServer:
 
     def get_working_directory(self):
         info = self.get_instance_info()
-        if info.get('type') == 'success' and info.get('result'):
+        if info and info.get('type') == 'success' and info.get('result'):
             return info['result'].get('working_directory')
         else:
             return None
 
     def make_request(self, function_name, parameters):
-        # Encode request
-        message_body = {
-                "function": function_name,
-                "parameters": parameters
-                }
-        encoded_message = json.dumps(message_body).encode('utf-8')
-        message_len = len(encoded_message)
+        try:
+            # Encode request
+            message_body = {
+                    "function": function_name,
+                    "parameters": parameters
+                    }
+            encoded_message = json.dumps(message_body).encode('utf-8')
+            message_len = len(encoded_message)
 
-        header = "ugdb-ipc".encode('utf-8') + message_len.to_bytes(4, byteorder='little')
+            header = "ugdb-ipc".encode('utf-8') + message_len.to_bytes(4, byteorder='little')
 
-        request = header + encoded_message
+            request = header + encoded_message
 
-        # Send constructed request
-        #print('sending "{}"'.format(request))
-        self.sock.sendall(request)
+            # Send constructed request
+            #print('sending "{}"'.format(request))
+            self.sock.sendall(request)
 
-        # Receive and decode response header
-        response_header = self.sock.recv(12)
-        response_message_length = int.from_bytes(response_header[8:15], byteorder='little')
+            # Receive and decode response header
+            response_header = self.sock.recv(12)
+            response_message_length = int.from_bytes(response_header[8:15], byteorder='little')
 
-        # Receive response message
-        amount_received = 0
-        response_message = ""
+            # Receive response message
+            amount_received = 0
+            response_message = ""
 
-        while amount_received < response_message_length:
-            data = self.sock.recv(64)
-            amount_received += len(data)
-            response_message += data.decode('utf8')
+            while amount_received < response_message_length:
+                data = self.sock.recv(64)
+                amount_received += len(data)
+                response_message += data.decode('utf8')
 
-        return json.loads(response_message)
+            return json.loads(response_message)
+        except OSError:
+            return None
 
 
 def ugdb_list_servers(socket_base_dir):
-    return [UgdbServer(socket_base_dir, identifier) for identifier in ugdb_list_potential_server_sockets(socket_base_dir)]
+    result = []
+    for identifier in ugdb_list_potential_server_sockets(socket_base_dir):
+        try:
+            result.append(UgdbServer(socket_base_dir, identifier))
+        except OSError:
+            pass #Ignore dead servers
+    return result
 
 def ugdb_interactive_server_select(servers):
     while True:
@@ -238,19 +245,22 @@ if server is None:
     ugdb_print_status("No active ugdb instance!")
 else:
     response = server.set_breakpoint(file, line)
-    type = response.get("type")
-    result = response.get("result")
-    reason = response.get("reason")
-    details = response.get("details")
-    if type == "success" and result:
-        ugdb_print_status(result)
-    elif type == "error" and reason:
-        if details:
-            ugdb_print_status("{} {}".format(reason, details))
+    if response:
+        type = response.get("type")
+        result = response.get("result")
+        reason = response.get("reason")
+        details = response.get("details")
+        if type == "success" and result:
+            ugdb_print_status(result)
+        elif type == "error" and reason:
+            if details:
+                ugdb_print_status("{} {}".format(reason, details))
+            else:
+                ugdb_print_status(reason)
         else:
-            ugdb_print_status(reason)
+            ugdb_print_status("Tried to set breakpoint. Invalid Response: '{}'".format(response))
     else:
-        ugdb_print_status("Tried to set breakpoint. Invalid Response: '{}'".format(response))
+        ugdb_print_status("Tried to set breakpoint, but got no response")
 EOF
 endfunction
 
