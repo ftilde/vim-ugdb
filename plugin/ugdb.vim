@@ -207,7 +207,6 @@ endfunction
 function! s:SetBreakpoint(file, line)
 python3 << EOF
 import vim
-import json
 
 socket_base_dir = os.path.join(os.getenv('XDG_RUNTIME_DIR'), 'ugdb')
 file = vim.eval("a:file")
