@@ -1,7 +1,6 @@
 " ----------------------------------------------------------------------------
 " Setup ----------------------------------------------------------------------
 " ----------------------------------------------------------------------------
-
 if !has('python3')
     echo "Error: Required vim compiled with +python3"
     finish
@@ -219,7 +218,19 @@ if server is None:
     ugdb_print_status("No active ugdb instance!")
 else:
     response = server.set_breakpoint(file, line)
-    ugdb_print_status("Tried to set breakpoint. Response is: '{}'".format(response))
+    type = response.get("type")
+    result = response.get("result")
+    reason = response.get("reason")
+    details = response.get("details")
+    if type == "success" and result:
+        ugdb_print_status(result)
+    elif type == "error" and reason:
+        if details:
+            ugdb_print_status("{} {}".format(reason, details))
+        else:
+            ugdb_print_status(reason)
+    else:
+        ugdb_print_status("Tried to set breakpoint. Invalid Response: '{}'".format(response))
 EOF
 endfunction
 
