@@ -37,8 +37,8 @@ class UgdbServer:
         try:
             self.sock.connect(self.path)
         except Exception as msg:
-            print("Cannot connect to socket at {}:".format(self.path))
-            print(msg)
+            ugdb_print_status("Cannot connect to socket at {}:".format(self.path))
+            ugdb_print_status(msg)
 
     def set_breakpoint(self, file, line):
         return self.make_request("set_breakpoint", {
@@ -48,6 +48,13 @@ class UgdbServer:
 
     def get_instance_info(self):
         return self.make_request("get_instance_info", {})
+
+    def get_working_directory(self):
+        info = self.get_instance_info()
+        if info.get('type') == 'success' and info.get('result'):
+            return info['result'].get('working_directory')
+        else:
+            return None
 
     def make_request(self, function_name, parameters):
         # Encode request
@@ -89,13 +96,10 @@ def ugdb_interactive_server_select(servers):
     while True:
         id = 0
         for s in servers:
-            try:
-                info = s.get_instance_info()
-                if info['type'] == 'success':
-                    print("{}: {}".format(id, info['result']['working_directory']))
-                    id += 1
-            except OSError:
-                pass # A crashing ugdb instance may have left a pipe behind
+            wd = s.get_working_directory()
+            if wd:
+                ugdb_print_status("{}: {}".format(id, wd))
+                id += 1
 
         selection = ugdb_getchar()
         if selection is None or selection in [13, 27, 0, 3]:
@@ -104,22 +108,22 @@ def ugdb_interactive_server_select(servers):
         try:
             selection_int = int(selection_char)
             if selection_int < id:
-                info = s.get_instance_info()
-                if info['type'] == 'success':
-                    print("Selected: {} ({})".format(selection_int, info['result']['working_directory']))
+                wd = s.get_working_directory()
+                if wd:
+                    ugdb_print_status("Selected: {} ({})".format(selection_int, wd))
                     return servers[selection_int]
                 else:
-                    print("Selected server disconnected");
+                    ugdb_print_status("Selected server disconnected");
                     return None
         except ValueError:
             pass
-        print("Invalid selection: {}".format(selection_char))
+        ugdb_print_status("Invalid selection: {}".format(selection_char))
 
 def ugdb_set_active_server(socket_base_dir):
     global ugdb_current_server
     servers = ugdb_list_servers(socket_base_dir)
     if not servers:
-        print("No active ugdb servers.")
+        ugdb_print_status("No active ugdb servers.")
         return
 
     new_server = ugdb_interactive_server_select(servers)
@@ -135,7 +139,7 @@ def ugdb_get_active_server(socket_base_dir):
     need_new_server = False
     servers = ugdb_list_servers(socket_base_dir)
     if not servers:
-        print("No active ugdb servers.")
+        ugdb_print_status("No active ugdb servers.")
         return None
 
     matching_server = [s for s in servers if s.identifier == ugdb_current_server]
@@ -145,10 +149,28 @@ def ugdb_get_active_server(socket_base_dir):
         if len(servers) == 1:
             new_server = servers[0]
         else:
-            # TODO: we can employ some heuristic once an identification command (or similar) is implemented in ugdb,
-            # e.g.: Try to match the working directories of ugdb and the current vim instance
-            print("Failed to automatically instance. Please choose manually:")
-            new_server = ugdb_interactive_server_select(servers)
+            # Employ heuristic: Try to match the working directories of ugdb and the current vim instance
+            current_dir = os.getcwd()
+            best_matching_servers = []
+            best_path = ""
+            longest_common_path_len = 0
+            for server in servers:
+                wd = server.get_working_directory()
+                if wd:
+                    common_path_len = len(os.path.commonprefix([current_dir, wd]))
+                    if common_path_len >= longest_common_path_len:
+                        if common_path_len > longest_common_path_len:
+                            best_matching_servers = []
+                        best_matching_servers.append(server)
+                        best_path = wd
+                        longest_common_path_len = common_path_len
+
+            if len(best_matching_servers) != 1:
+                ugdb_print_status("Failed to automatically select instance. Please choose manually:")
+                new_server = ugdb_interactive_server_select(servers)
+            else:
+                ugdb_print_status("Automatically selected ugdb server at {}".format(best_path))
+                new_server = best_matching_servers[0]
     else:
         new_server = matching_server[0]
 
