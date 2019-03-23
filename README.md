@@ -1,7 +1,7 @@
 Vim-ugdb
 ========
 
-This is a (so far very much proof-of-concept) plugin remotely control instances of [ugdb](https://github.com/ftilde/unsegen) (an alternative TUI for gdb) via the provided IPC interface.
+This is a (so far very much proof-of-concept) plugin remotely control instances of [ugdb](https://github.com/ftilde/ugdb) (an alternative TUI for gdb) via the provided IPC interface.
 
 Vim-ugdb currently supports the following commands:
 
