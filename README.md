@@ -1,12 +1,11 @@
-Vim-ugdb
-========
+# Vim-ugdb
 
 This is a (so far very much proof-of-concept) plugin remotely control instances of [ugdb](https://github.com/ftilde/ugdb) (an alternative TUI for gdb) via the provided IPC interface.
 
 Vim-ugdb currently supports the following commands:
 
-- **UGDBBreakpoint:** Set a breakpoint at the current file and line.
-- **UGDBSelectInstance:** Manually select the ugdb instance to connect to.
+- `UGDBBreakpoint`: Set a breakpoint at the current file and line.
+- `UGDBSelectInstance`: Manually select the ugdb instance to connect to.
 
 ## Installation
 
