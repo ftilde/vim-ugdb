@@ -33,7 +33,7 @@ class UgdbServer:
         self.path = os.path.join(socket_path, identifier)
         self.identifier = identifier
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.settimeout(0.1) #100ms ought to be enough for everyone
+        self.sock.settimeout(1.0) #1000ms ought to be enough for everyone
 
         #might fail and throw and exception
         self.sock.connect(self.path)
