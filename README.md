@@ -6,6 +6,7 @@ Vim-ugdb currently supports the following commands:
 
 - `UGDBBreakpoint`: Set a breakpoint at the current file and line.
 - `UGDBSelectInstance`: Manually select the ugdb instance to connect to.
+- `UGDBShowFile`: Show the current file at the current line in the ugdb pager.
 
 ## Installation
 

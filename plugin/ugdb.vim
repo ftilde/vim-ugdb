@@ -44,6 +44,12 @@ class UgdbServer:
             "line": int(line)
             })
 
+    def show_file(self, file, line):
+        return self.make_request("show_file", {
+            "file": file,
+            "line": int(line)
+            })
+
     def get_instance_info(self):
         return self.make_request("get_instance_info", {})
 
@@ -216,6 +222,24 @@ def ugdb_print_status(status, highlight=None):
     else:
         vim.command('echo "{}"'.format(status))
         #print(status)
+
+def ugdb_print_response(response):
+    if response:
+        type = response.get("type")
+        result = response.get("result")
+        reason = response.get("reason")
+        details = response.get("details")
+        if type == "success" and result:
+            ugdb_print_status(result)
+        elif type == "error" and reason:
+            if details:
+                ugdb_print_status("{} {}".format(reason, details), "ErrorMsg")
+            else:
+                ugdb_print_status(reason, "ErrorMsg")
+        else:
+            ugdb_print_status("Tried to set breakpoint. Invalid Response: '{}'".format(response), "ErrorMsg")
+    else:
+        ugdb_print_status("Tried to set breakpoint, but got no response", "ErrorMsg")
 EOF
 endfunction
 
@@ -250,22 +274,27 @@ if server is None:
     ugdb_print_status("No active ugdb instance!", "ErrorMsg")
 else:
     response = server.set_breakpoint(file, line)
-    if response:
-        type = response.get("type")
-        result = response.get("result")
-        reason = response.get("reason")
-        details = response.get("details")
-        if type == "success" and result:
-            ugdb_print_status(result)
-        elif type == "error" and reason:
-            if details:
-                ugdb_print_status("{} {}".format(reason, details), "ErrorMsg")
-            else:
-                ugdb_print_status(reason, "ErrorMsg")
-        else:
-            ugdb_print_status("Tried to set breakpoint. Invalid Response: '{}'".format(response), "ErrorMsg")
-    else:
-        ugdb_print_status("Tried to set breakpoint, but got no response", "ErrorMsg")
+    ugdb_print_response(response)
+EOF
+endfunction
+
+" Try to show the specified file and line in the ugdb pager.
+" The currently active ugdb instance is chosen as a target.
+" If no instance is selected, a selection has to be made first.
+function! s:ShowFile(file, line)
+python3 << EOF
+import vim
+
+socket_base_dir = os.path.join(os.getenv('XDG_RUNTIME_DIR'), 'ugdb')
+file = vim.eval("a:file")
+line = vim.eval("a:line")
+
+server = ugdb_get_active_server(socket_base_dir)
+if server is None:
+    ugdb_print_status("No active ugdb instance!", "ErrorMsg")
+else:
+    response = server.show_file(file, line)
+    ugdb_print_response(response)
 EOF
 endfunction
 
@@ -274,4 +303,5 @@ endfunction
 " Public vim commands --------------------------------------------------------
 " ----------------------------------------------------------------------------
 command! -nargs=0 UGDBBreakpoint call s:SetBreakpoint(@%, line('.'))
+command! -nargs=0 UGDBShowFile call s:ShowFile(@%, line('.'))
 command! -nargs=0 UGDBSelectInstance call s:SelectInstance()
